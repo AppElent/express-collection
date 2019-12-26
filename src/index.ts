@@ -1,14 +1,115 @@
-export class C {
-    private x = 10;
-    public getX = (): number => this.x;
-    public setX = (newVal: number): void => {
-        this.x = newVal;
-    };
+/* eslint-disable */
+import { Request, Response, NextFunction } from 'express';
+import createError from 'http-errors';
+
+export const logger = (req: Request, resp: Response, next: NextFunction): void => {
+    console.log('Request logged:', req.method, req.path);
+    next();
+};
+
+export const create404Error = (req: Request, res: Response, next: NextFunction): void => {
+    next(createError(404));
+};
+
+export const lowerCaseQueryParams = (req: Request, res: Response, next: NextFunction): void => {
+    for (const key in req.query) {
+        req.query[key.toLowerCase()] = req.query[key];
+    }
+    next();
+};
+
+type cacheMiddlewareOptions = {
+    userSpecific?: boolean;
+};
+
+type cache = {
+    get: (key: string) => any;
+    set: (key: string, data: any) => any;
+};
+
+interface ResponseNew extends Response {
+    sendResponse: (data: any) => void;
 }
 
-export const x = new C();
-export const y = { ...{ some: 'value' } };
+interface RequestNew extends Request {
+    uid: string;
+}
 
-export function sum(a: number, b: number): number {
-    return a + b;
+export const cacheMiddleware = (cache: cache, options?: cacheMiddlewareOptions) => async (
+    req: RequestNew,
+    res: ResponseNew,
+    next: NextFunction,
+): Promise<void | any> => {
+    if (!options) {
+        options = {};
+    }
+    let key = req.originalUrl || req.url;
+    if (options.userSpecific) key = req.uid + '_' + key;
+    const cachedata = await cache.get(key);
+    if (cachedata) {
+        return res.send(cachedata);
+    } else {
+        res.sendResponse = res.send;
+        res.send = (body: any): any => {
+            cache.set(key, body);
+            res.sendResponse(body);
+        };
+        next();
+    }
+};
+
+interface Error {
+    message?: string;
+    status?: number;
+}
+
+export const errorHandler = (err: Error, req: Request, res: Response): Response => {
+    // set locals, only providing error in development
+    res.locals.message = err.message;
+    res.locals.error = req.app.get('env') === 'development' ? err : {};
+    console.log(err);
+    // render the error page
+    res.status(err.status || 500);
+    //res.render('error');
+    const errormessage = err.message ? err.message : err;
+    return res.json({ success: false, message: errormessage });
+};
+
+export const httpRedirect = (req: Request, res: Response, next: NextFunction): void => {
+    console.log(req.header);
+    if (req.header('x-forwarded-proto') !== 'https') {
+        res.redirect(`https://${req.header('host')}${req.url}`);
+    } else {
+        next();
+    }
+};
+
+export const onListening = (server: any) => (): void  => {
+    const addr = server.address();
+    const bind = typeof addr === 'string' ? 'pipe ' + addr : 'port ' + addr.port;
+    console.log('Listening on ' + bind);
+}
+
+type ListenError = {
+    syscall: string;
+    code: string;
+};
+export const onError = (port: string) => (error: ListenError): void => {
+    if (error.syscall !== 'listen') {
+        throw error;
+    }
+
+    // handle specific listen errors with friendly messages
+    switch (error.code) {
+        case 'EACCES':
+            console.error(port + ' requires elevated privileges');
+            process.exit(1);
+            break;
+        case 'EADDRINUSE':
+            console.error(port + ' is already in use');
+            process.exit(1);
+            break;
+        default:
+            throw error;
+    }
 }
