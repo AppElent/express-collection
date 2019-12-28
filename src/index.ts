@@ -20,6 +20,7 @@ export const lowerCaseQueryParams = (req: Request, res: Response, next: NextFunc
 
 type cacheMiddlewareOptions = {
     userSpecific?: boolean;
+    reqUserProperty?: string;
 };
 
 type cache = {
@@ -27,24 +28,18 @@ type cache = {
     set: (key: string, data: any) => any;
 };
 
-interface ResponseNew extends Response {
-    sendResponse: (data: any) => void;
-}
-
-interface RequestNew extends Request {
-    uid: string;
-}
-
 export const cacheMiddleware = (cache: cache, options?: cacheMiddlewareOptions) => async (
-    req: RequestNew,
-    res: ResponseNew,
+    req: any,
+    res: any,
     next: NextFunction,
 ): Promise<void | any> => {
     if (!options) {
         options = {};
     }
     let key = req.originalUrl || req.url;
-    if (options.userSpecific) key = req.uid + '_' + key;
+    if (options.userSpecific && options.reqUserProperty){
+        key = req[options.reqUserProperty] + '_' + key;
+    } 
     const cachedata = await cache.get(key);
     if (cachedata) {
         return res.send(cachedata);
