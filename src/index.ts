@@ -23,7 +23,7 @@ type cacheMiddlewareOptions = {
 };
 
 type cache = {
-    get: (key: string) => any;
+    get: (key: string, saveFunction?: () => void) => any;
     set: (key: string, data: any) => any;
 };
 
@@ -112,4 +112,10 @@ export const onError = (port: string) => (error: ListenError): void => {
         default:
             throw error;
     }
+}
+
+export const asyncHandler = (fn: any) => (...args: any) => {
+  const fnReturn = fn(...args)
+  const next = args[args.length-1]
+  return Promise.resolve(fnReturn).catch(next)
 }
